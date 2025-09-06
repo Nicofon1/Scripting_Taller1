@@ -1,38 +1,38 @@
 using System.Collections.Generic;
 using UnityEngine;
 
+[RequireComponent(typeof(Rigidbody))]
 public class AI_Controller : MonoBehaviour
 {
-    // --- Configuración visible en el Inspector de Unity ---
+    // --- Configuración ---
     public Transform targetObject;
     public float moveSpeed = 5f;
     public float jumpForce = 7f;
     public float validDistance = 15f;
     public float waitTime = 2f;
 
+    // --- Estados internos ---
     private Root _behaviorTree;
     private bool _isWaiting = false;
     private float _waitTimer = 0f;
+    private bool _isChasing = false; // El interruptor que las tareas controlan
     private Rigidbody _rb;
 
     void Start()
     {
-         _rb = GetComponent<Rigidbody>();
-        // --- Construir el Árbol de Comportamiento ---
-        // Aquí creamos las instancias de nuestros nodos específicos.
+        _rb = GetComponent<Rigidbody>();
 
-        // 1. La tarea de moverse (hijo del selector)
-        var moveNode = new MoveTask(targetObject, moveSpeed);
+        // --- Construcción del Árbol ---
+        // Las tareas ahora necesitan una referencia a 'this' (el controlador) para dar órdenes
+        var moveNode = new MoveTask(this);
         var waitNode = new WaitTask(this);
-        var jumpNode = new JumpTask(_rb, jumpForce);
-        // 2. El selector que comprueba la distancia (padre de la tarea de moverse)
+        var jumpNode = new JumpTask(_rb, jumpForce, this); // Le pasamos el controlador
+
         var checkDistanceNode = new CheckDistanceSelector(
             targetObject,
             validDistance,
             new List<Node> { moveNode }
         );
-
-        // 3. La tarea de esperar
 
         var mainSelector = new SimpleSelector(new List<Node>
         {
@@ -40,46 +40,60 @@ public class AI_Controller : MonoBehaviour
             jumpNode
         });
 
-        // 4. La secuencia principal que une todo (según el punto 2.c del PDF)
         var mainSequence = new Sequence(new List<Node>
         {
             mainSelector,
             waitNode
         });
 
-        // 5. El nodo raíz que inicia todo
         _behaviorTree = new Root(mainSequence);
     }
 
     void Update()
     {
-      // Si estamos en modo de espera, solo manejamos el temporizador.
-      if (_isWaiting)
-      {
-          _waitTimer += Time.deltaTime;
-          if (_waitTimer >= waitTime)
-          {
+        // 1. PRIMERO: Manejar el estado de espera. Si estamos esperando, no hacemos NADA MÁS.
+        if (_isWaiting)
+        {
+            _waitTimer += Time.deltaTime;
+            if (_waitTimer >= waitTime)
+            {
+                _isWaiting = false;
+            }
+            return; // Salimos del Update aquí mismo.
+        }
 
-              _isWaiting = false; // Se acabó la espera
-          }
-      }
-      // Si NO estamos esperando, ejecutamos el árbol de comportamiento.
-      else
-      {
-          if (_behaviorTree != null)
-          {
-              _behaviorTree.Execute(this.gameObject);
-          }
-      }
-      //Debug.Log(_waitTimer);
+        // 2. SEGUNDO: Ejecutar el árbol para que actualice los "interruptores" de estado.
+        if (_behaviorTree != null)
+        {
+            _behaviorTree.Execute(this.gameObject);
+        }
+
+        // 3. TERCERO: Actuar según el estado de los interruptores.
+        //    Esta parte ya no está dentro de un 'else', por lo que siempre se ejecuta después del árbol.
+        if (_isChasing)
+        {
+            // Mover el personaje continuamente
+            transform.position = Vector3.MoveTowards(
+                transform.position,
+                targetObject.position,
+                moveSpeed * Time.deltaTime);
+        }
     }
+
+    // --- Métodos públicos para que las Tareas den órdenes ---
+
     public void StartWait()
     {
-        if (!_isWaiting)
+        // La espera solo comienza si no estamos en medio de una persecución
+        if (!_isChasing)
         {
-            Debug.Log("Iniciando espera...");
             _isWaiting = true;
             _waitTimer = 0f;
         }
+    }
+
+    public void SetChaseStatus(bool isChasing)
+    {
+        _isChasing = isChasing;
     }
 }

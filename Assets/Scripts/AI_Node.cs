@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.InputSystem.XR;
 
 public class CheckDistanceSelector : Selector
 {
@@ -22,84 +23,80 @@ public class CheckDistanceSelector : Selector
 }
 
 // Punto 2.b: Una Tarea que mueve al agente hacia el objetivo.
+// (El resto de tus clases: CheckDistanceSelector, WaitTask, JumpTask, SimpleSelector se quedan EXACTAMENTE IGUAL que en la versión que funcionaba con el StartWait())
+
+// --- LA NUEVA Y MEJORADA MoveTask ---public class MoveTask : Task
+// ... (CheckDistanceSelector, SimpleSelector, etc. no cambian) ...
+
+// MoveTask ahora solo activa el interruptor de persecución en el controlador.// (CheckDistanceSelector, SimpleSelector, etc., no cambian)
+// ... (CheckDistanceSelector, SimpleSelector, etc. no cambian) ...
+
+// MoveTask ahora solo activa el interruptor de persecución en el controlador.
 public class MoveTask : Task
 {
-    private Transform _target;
-    private float _speed;
+    private AI_Controller _controller;
 
-    public MoveTask(Transform target, float speed)
+    public MoveTask(AI_Controller controller)
     {
-        _target = target;
-        _speed = speed;
+        _controller = controller;
     }
 
     public override bool Execute(GameObject agent)
     {
-        // Mover el agente
-        agent.transform.position = Vector3.MoveTowards(
-            agent.transform.position,
-            _target.position,
-            _speed * Time.deltaTime);
-
-        Debug.Log("Moviéndome hacia el objetivo...");
-
-        // Esta tarea siempre se considera "exitosa" mientras se ejecuta
+        // Encendemos el interruptor de persecución.
+        _controller.SetChaseStatus(true);
+        // La tarea siempre tiene éxito para que la Sequence pueda continuar.
         return true;
     }
 }
 
-// Punto 2.c: Una Tarea que espera un tiempo determinado.
-public class WaitTask : Task
-{
-  // Una referencia al controlador para poder decirle que empiece a esperar.
-  private AI_Controller _controller;
-
-  public WaitTask(AI_Controller controller)
-  {
-      _controller = controller;
-  }
-
-  public override bool Execute(GameObject agent)
-  {
-      // La única misión de esta tarea es activar el modo de espera en el controlador.
-      _controller.StartWait();
-      Debug.Log("Esperando-parte1");
-      // La tarea en sí misma siempre se completa instantáneamente con éxito.
-      return true;
-  }
-
-}
-
-// (Aquí irían las clases CheckDistanceSelector, MoveTask y WaitTask que ya hicimos)
-
-// NUEVA TAREA: Una Tarea que hace que el agente salte.
+// JumpTask hace el salto Y apaga el interruptor de persecución.
 public class JumpTask : Task
 {
     private Rigidbody _rigidbody;
     private float _jumpForce;
-    private bool _isGrounded => _rigidbody.linearVelocity.y == 0; // Una forma simple de saber si está en el suelo
+    private AI_Controller _controller; // Necesita una referencia al controlador
 
-    public JumpTask(Rigidbody rigidbody, float jumpForce)
+    // Le pasamos el controlador además de los datos del salto
+    public JumpTask(Rigidbody rigidbody, float jumpForce, AI_Controller controller)
     {
         _rigidbody = rigidbody;
         _jumpForce = jumpForce;
+        _controller = controller;
     }
 
     public override bool Execute(GameObject agent)
     {
-        // Solo saltamos si el Rigidbody existe y si está en el suelo
-        if (_rigidbody != null && _isGrounded)
+        // Apagamos el interruptor de persecución.
+        _controller.SetChaseStatus(false);
+
+        // Hacemos el salto (solo si está en el suelo)
+        if (_rigidbody != null && _rigidbody.linearVelocity.y == 0)
         {
             _rigidbody.AddForce(Vector3.up * _jumpForce, ForceMode.Impulse);
             Debug.Log("¡Saltando!");
-            return true; // El salto fue exitoso
+            return true; // Éxito
         }
-
-        // Si ya está en el aire o no tiene Rigidbody, la acción falla para que el árbol no se quede atascado.
-        return false;
+        return false; // Falla si ya está en el aire
     }
 }
 
+// WaitTask se queda como estaba en la versión que funcionaba con StartWait()
+public class WaitTask : Task
+{
+    private AI_Controller _controller;
+
+    public WaitTask(AI_Controller controller)
+    {
+        _controller = controller;
+    }
+
+    public override bool Execute(GameObject agent)
+    {
+        _controller.StartWait();
+        return true;
+    }
+}
 // NECESITAREMOS ESTO: Un Selector simple que no tiene condición propia.
 // Su único trabajo es ejecutar a sus hijos hasta que uno tenga éxito (pura lógica OR).
 public class SimpleSelector : Selector
