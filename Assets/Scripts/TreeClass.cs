@@ -1,25 +1,12 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-public class TreeClass
-{
-
-}
-
-
 
 public abstract class Node
 {
     protected List<Node> children = new List<Node>();
 
-
-    //public void AddChild(Node node)
-    //{
-    //    children.Add(node);
-    //}
-
     public abstract bool Execute(GameObject agent);
-
 
 }
 public abstract class Task : Node
@@ -35,7 +22,6 @@ public class Root : Node
 
    public override bool Execute(GameObject agent)
    {
-       // La única misión del Root es ejecutar a su único hijo.
        if (children.Count > 0)
        {
            return children[0].Execute(agent);
@@ -77,24 +63,20 @@ public abstract class Selector : Composite
         this.children = childrenNodes;
     }
 
-    // La condición específica que debe cumplirse
     public abstract bool Check(GameObject agent);
 
     public override bool Execute(GameObject agent)
     {
-        // Si la condición se cumple, intenta ejecutar a los hijos.
         if (Check(agent))
         {
             foreach (var child in children)
             {
-                // Si un hijo tiene éxito, todo el selector tiene éxito. (Lógica OR)
                 if (child.Execute(agent))
                 {
                     return true;
                 }
             }
         }
-        // Falla si la condición 'Check' es falsa, o si ninguno de los hijos tuvo éxito.
         return false;
     }
 
